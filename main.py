@@ -11,17 +11,17 @@ from fastapi.templating import Jinja2Templates
 DB_PATH = os.environ.get("DB_PATH", "lab.db")
 CATEGORIES = ["公用试剂", "特殊试剂", "试剂盒", "酶", "细胞", "抗体", "耗材", "细胞培养", "设备"]
 
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    return conn
-
 def localtime():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 def localdate():
     return date.today().strftime("%Y-%m-%d")
+
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    return conn
 
 def init_db():
     db = get_db()
@@ -82,10 +82,9 @@ def item_status(item: dict) -> tuple:
         return ("red", "已用完")
     if expiry:
         try:
-            exp_date = datetime.strptime(expiry, "%Y-%m-%d").date()
-            if exp_date <= date.today():
+            if datetime.strptime(expiry, "%Y-%m-%d").date() <= date.today():
                 return ("red", "已过期")
-            if exp_date <= date.today() + timedelta(days=7):
+            if datetime.strptime(expiry, "%Y-%m-%d").date() <= date.today() + timedelta(days=7):
                 return ("yellow", "即将过期")
         except (ValueError, TypeError):
             pass
@@ -198,7 +197,6 @@ async def api_items_update(item_id: int, request: Request):
     nickname = form.get("nickname", "")
     now = localtime()
     db = get_db()
-
     if form.get("_quick") == "1":
         old = db.execute("SELECT name, quantity FROM items WHERE id=?", (item_id,)).fetchone()
         if old:
@@ -208,7 +206,6 @@ async def api_items_update(item_id: int, request: Request):
             db.commit()
         db.close()
         return RedirectResponse("/", status_code=303)
-
     db.execute("""UPDATE items SET name=?, quantity=?, unit=?, location=?, category=?,
         expiry_date=?, daily_consumption=?, min_threshold=?, supplier=?, price=?,
         notes=?, updated_at=? WHERE id=?""", (
