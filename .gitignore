@@ -1,0 +1,4 @@
+lab.db
+__pycache__/
+.env
+.superpowers/

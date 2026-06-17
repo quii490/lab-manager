@@ -1,0 +1,29 @@
+{% extends "layout.html" %}
+{% block title %}操作日志{% endblock %}
+
+{% block content %}
+<div class="logs-page">
+    <h2 style="font-size:20px;margin-bottom:16px;">操作日志</h2>
+
+    {% if logs %}
+    <div class="table-wrap" style="margin-bottom:16px;">
+        <table>
+            <thead>
+                <tr><th>时间</th><th>操作者</th><th>操作</th></tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td style="color:var(--text-muted);font-size:12px;">{{ log.created_at }}</td>
+                    <td><strong>{{ log.nickname }}</strong></td>
+                    <td style="color:var(--text-secondary);">{{ log.action }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p style="color:var(--text-muted);text-align:center;padding:40px;">暂无操作记录</p>
+    {% endif %}
+</div>
+{% endblock %}

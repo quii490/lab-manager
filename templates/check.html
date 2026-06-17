@@ -1,0 +1,124 @@
+{% extends "layout.html" %}
+{% block title %}每周检查{% endblock %}
+
+{% block content %}
+<div class="check-page">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+        <div>
+            <h2 style="font-size:20px;margin:0;">每周检查</h2>
+            <p style="font-size:13px;color:var(--text-muted);margin:4px 0 0 0;">
+                需要检查的物品：{{ items|length }} 个
+                （{{ items|selectattr('weekly_check','equalto',1)|list|length }} 个每周必查{% set warn_items = items|selectattr('status_level','in',['red','yellow'])|list %}{% if warn_items|length > 0 %} + {{ warn_items|length }} 个状态警告{% endif %}）
+            </p>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:13px;color:var(--text-muted);">值日生：</span>
+            <input type="text" id="dutyNickname" class="search-box" style="width:140px;" placeholder="输入昵称" onchange="saveDuty()">
+        </div>
+    </div>
+
+    {% if items %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>名称</th>
+                    <th>分类</th>
+                    <th>系统数量</th>
+                    <th>单位</th>
+                    <th>位置</th>
+                    <th>过期日期</th>
+                    <th>每周必查</th>
+                    <th>状态</th>
+                    <th>上次检查</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                {% set level = item.status_level %}
+                <tr style="{% if level == 'red' %}background:#fef2f2;{% elif level == 'yellow' %}background:#fffbeb;{% endif %}">
+                    <td><strong>{{ item.name }}</strong></td>
+                    <td>{{ item.category }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td>{{ item.unit }}</td>
+                    <td>{{ item.location }}</td>
+                    <td>{{ item.expiry_date or '-' }}</td>
+                    <td>{% if item.weekly_check %}<span style="color:var(--accent);font-weight:500;">每周</span>{% else %}<span style="color:var(--text-muted);">—</span>{% endif %}</td>
+                    <td><span class="status-dot {{ level }}"></span>{{ item.status_text }}</td>
+                    <td style="color:var(--text-muted);font-size:12px;">{{ item.last_checked or '从未检查' }}</td>
+                    <td>
+                        <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+                            <form method="post" action="/api/check/{{ item.id }}/confirm" class="check-form">
+                                <input type="hidden" name="nickname" value="">
+                                <input type="hidden" name="quantity" value="{{ item.quantity }}">
+                                <button type="submit" class="btn btn-sm btn-primary">确认</button>
+                            </form>
+                            <span style="font-size:11px;color:var(--text-muted);">调量</span>
+                            <input type="number" step="any" value="{{ item.quantity }}" style="width:60px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;"
+                                   class="qty-input" data-id="{{ item.id }}" data-name="{{ item.name }}">
+                            <button class="btn btn-sm btn-outline qty-update" data-id="{{ item.id }}">更新</button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:60px 20px;">
+        <p style="font-size:48px;margin:0;">&#10003;</p>
+        <p style="font-size:16px;color:var(--text-muted);">所有物品状态良好，无需检查！</p>
+    </div>
+    {% endif %}
+
+    {% if check_records %}
+    <h3 style="margin-top:24px;font-size:15px;color:var(--text-muted);">近期检查记录</h3>
+    <div class="table-wrap" style="margin-top:8px;">
+        <table>
+            <thead><tr><th>时间</th><th>物品</th><th>操作</th><th>详情</th><th>检查人</th></tr></thead>
+            <tbody>
+                {% for r in check_records %}
+                <tr>
+                    <td style="color:var(--text-muted);font-size:12px;">{{ r.created_at }}</td>
+                    <td>{{ r.item_name or '-' }}</td>
+                    <td>{{ r.action }}</td>
+                    <td style="color:var(--text-secondary);">{{ r.note or '-' }}</td>
+                    <td><strong>{{ r.nickname }}</strong></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+const dutyNick = document.getElementById('dutyNickname');
+dutyNick.value = localStorage.getItem('dutyNickname') || '';
+
+function saveDuty() { localStorage.setItem('dutyNickname', dutyNick.value); }
+
+document.querySelectorAll('.check-form').forEach(form => {
+    form.addEventListener('submit', function() {
+        form.querySelector('input[name="nickname"]').value = dutyNick.value || 'anonymous';
+    });
+});
+
+document.querySelectorAll('.qty-update').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const id = this.dataset.id;
+        const input = document.querySelector(`.qty-input[data-id="${id}"]`);
+        const qty = input.value;
+        const nickname = dutyNick.value || 'anonymous';
+        const f = document.createElement('form');
+        f.method = 'post';
+        f.action = `/api/check/${id}/confirm`;
+        f.innerHTML = `<input name="nickname" value="${nickname}"><input name="quantity" value="${qty}">`;
+        document.body.appendChild(f);
+        f.submit();
+        document.body.removeChild(f);
+    });
+});
+</script>
+{% endblock %}

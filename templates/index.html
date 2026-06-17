@@ -1,0 +1,258 @@
+{% extends "layout.html" %}
+{% block title %}物资清单{% endblock %}
+
+{% block content %}
+<div class="tools-bar">
+    <h2 style="font-size:20px;">物资清单</h2>
+    <div class="right">
+        <button class="btn btn-outline" onclick="exportExcel()">导出 Excel</button>
+        <button class="btn btn-primary" onclick="openAddModal()">+ 添加物品</button>
+    </div>
+</div>
+
+{% if warnings %}
+<div class="warning-banner {% if warnings|selectattr('status_level','equalto','red')|list|length > 0 %}critical{% endif %}">
+    <span>{% if warnings|selectattr('status_level','equalto','red')|list|length > 0 %}{% endif %}</span>
+    <span>
+        <strong>注意：</strong>
+        {% for w in warnings %}
+            <span class="warning-item">
+                <a href="#" onclick="scrollToItem({{ loop.index }})" style="color:{{ '#ef4444' if w.status_level == 'red' else '#b45309' }}">{{ w.name }}({{ w.status_text }})</a>
+            </span>
+        {% endfor %}
+    </span>
+</div>
+{% endif %}
+
+<div class="page-layout">
+    <aside class="sidebar">
+        <h3>分类筛选</h3>
+        <label><input type="checkbox" class="cat-filter" value="" checked onchange="filterItems()"> 全部</label>
+        {% for cat in categories %}
+        <label><input type="checkbox" class="cat-filter" value="{{ cat }}" onchange="filterItems()"> {{ cat }}</label>
+        {% endfor %}
+        <hr>
+        <input type="text" class="search-box" placeholder="搜索物品..." oninput="filterItems()" id="searchInput">
+        <hr>
+        <h3>统计</h3>
+        <p class="stat">物品总数：<strong id="stat-count">{{ total_count }}</strong></p>
+        <p class="stat">总价值：<strong id="stat-value">¥{{ "%.0f"|format(total_value) }}</strong></p>
+    </aside>
+
+    <section>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>名称</th>
+                        <th>分类</th>
+                        <th>数量</th>
+                        <th>预计剩余</th>
+                        <th>单位</th>
+                        <th>位置</th>
+                        <th>过期日期</th>
+                        <th>状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="items-tbody">
+                    {% for item in items %}
+                    {% set level = item.status_level %}
+                    {% set bg = '' %}
+                    {% if level == 'red' %}{% set bg = 'background:#fef2f2;' %}{% elif level == 'yellow' %}{% set bg = 'background:#fffbeb;' %}{% endif %}
+                    <tr data-category="{{ item.category }}" data-search="{{ item.name }}" style="{{ bg }}">
+                        <td>{{ item.name }}</td>
+                        <td>{{ item.category }}</td>
+                        <td>{{ item.quantity }}</td>
+                        <td style="color:#64748b;font-size:12px;">{{ item.est_remaining }}</td>
+                        <td>{{ item.unit }}</td>
+                        <td>{{ item.location }}</td>
+                        <td>{{ item.expiry_date or '-' }}</td>
+                        <td>
+                            <span class="status-dot {{ level }}"></span>
+                            {{ item.status_text }}
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-ghost" onclick="openEditModal({{ item.id }})">编辑</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteItem({{ item.id }}, '{{ item.name }}')">删除</button>
+                            <div style="display:inline-flex;gap:2px;align-items:center;margin-left:4px;">
+                                <input type="number" step="any" value="{{ item.quantity }}" style="width:50px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;font-size:11px;"
+                                       class="quick-qty" data-id="{{ item.id }}" data-name="{{ item.name }}">
+                                <button class="btn btn-sm btn-outline quick-update" data-id="{{ item.id }}" style="font-size:10px;padding:2px 6px;">改</button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal-overlay" id="itemModal">
+    <div class="modal">
+        <h2 id="modalTitle">添加物品</h2>
+        <form id="itemForm" method="post" action="/api/items">
+            <input type="hidden" name="nickname" id="formNickname">
+            <input type="hidden" name="_method" id="formMethod">
+            <div class="form-row">
+                <div class="form-group"><label>名称 *</label><input name="name" id="fname" required></div>
+                <div class="form-group"><label>分类</label>
+                    <select name="category" id="fcategory">
+                        {% for cat in categories %}
+                        <option value="{{ cat }}">{{ cat }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>数量 *</label><input name="quantity" id="fquantity" type="number" step="any" value="0" required></div>
+                <div class="form-group"><label>单位</label><input name="unit" id="funit" placeholder="瓶、盒、μL..."></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>存放位置</label><input name="location" id="flocation" placeholder="冰箱A、柜子2..."></div>
+                <div class="form-group"><label>过期/用完日期</label><input name="expiry_date" id="fexpiry" type="date"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>日消耗量</label><input name="daily_consumption" id="fdaily" type="number" step="any" value="0" placeholder="每天用多少"></div>
+                <div class="form-group"><label>最低库存阈值</label><input name="min_threshold" id="fthreshold" type="number" step="any" value="0" placeholder="低于此值警告"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>供应商</label><input name="supplier" id="fsupplier"></div>
+                <div class="form-group"><label>单价 (¥)</label><input name="price" id="fprice" type="number" step="0.01" value="0"></div>
+            </div>
+            <div class="form-group"><label>备注</label><textarea name="notes" id="fnotes" rows="2"></textarea></div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-outline" onclick="closeModal()">取消</button>
+                <button type="submit" class="btn btn-primary">保存</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+const nickname = localStorage.getItem('nickname') || '';
+document.getElementById('formNickname').value = nickname;
+
+function openAddModal() {
+    document.getElementById('modalTitle').textContent = '添加物品';
+    document.getElementById('itemForm').action = '/api/items';
+    document.getElementById('formMethod').value = '';
+    document.getElementById('fname').value = '';
+    document.getElementById('fcategory').value = '耗材';
+    document.getElementById('fquantity').value = '0';
+    document.getElementById('funit').value = '';
+    document.getElementById('flocation').value = '';
+    document.getElementById('fexpiry').value = '';
+    document.getElementById('fdaily').value = '0';
+    document.getElementById('fthreshold').value = '0';
+    document.getElementById('fsupplier').value = '';
+    document.getElementById('fprice').value = '0';
+    document.getElementById('fnotes').value = '';
+    document.getElementById('itemModal').classList.add('open');
+}
+
+function openEditModal(id) {
+    fetch('/api/items?search=')
+        .then(r => r.json())
+        .then(items => {
+            const item = items.find(i => i.id === id);
+            if (!item) return;
+            document.getElementById('modalTitle').textContent = '编辑物品';
+            const form = document.getElementById('itemForm');
+            form.action = '/api/items/' + id;
+            document.getElementById('formMethod').value = 'put';
+            document.getElementById('fname').value = item.name;
+            document.getElementById('fcategory').value = item.category;
+            document.getElementById('fquantity').value = item.quantity;
+            document.getElementById('funit').value = item.unit;
+            document.getElementById('flocation').value = item.location || '';
+            document.getElementById('fexpiry').value = item.expiry_date || '';
+            document.getElementById('fdaily').value = item.daily_consumption || 0;
+            document.getElementById('fthreshold').value = item.min_threshold || 0;
+            document.getElementById('fsupplier').value = item.supplier || '';
+            document.getElementById('fprice').value = item.price || 0;
+            document.getElementById('fnotes').value = item.notes || '';
+            document.getElementById('itemModal').classList.add('open');
+        });
+}
+
+function closeModal() { document.getElementById('itemModal').classList.remove('open'); }
+
+document.getElementById('itemForm').addEventListener('submit', function(e) {
+    const method = document.getElementById('formMethod').value;
+    if (method === 'put') {
+        e.preventDefault();
+        const action = this.action;
+        const formData = new FormData(this);
+        fetch(action, { method: 'PUT', body: formData })
+            .then(() => { window.location.reload(); });
+    }
+});
+
+async function deleteItem(id, name) {
+    if (!confirm('确定删除 "' + name + '" 吗？此操作不可恢复。')) return;
+    await fetch('/api/items/' + id + '?nickname=' + encodeURIComponent(nickname), { method: 'DELETE' });
+    window.location.reload();
+}
+
+function exportExcel() { window.location.href = '/export'; }
+
+// Quick quantity update on inventory page
+document.querySelectorAll('.quick-update').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const id = this.dataset.id;
+        const input = document.querySelector(`.quick-qty[data-id="${id}"]`);
+        const name = input.dataset.name;
+        const qty = input.value;
+        if (!confirm(`将 "${name}" 数量改为 ${qty} 吗？`)) return;
+        const formData = new FormData();
+        formData.append('_quick', '1');
+        formData.append('nickname', nickname || 'anonymous');
+        formData.append('quantity', qty);
+        fetch('/api/items/' + id, { method: 'PUT', body: formData })
+            .then(resp => {
+                if (resp.redirected) window.location.reload();
+            });
+    });
+});
+
+function filterItems() {
+    const checked = [...document.querySelectorAll('.cat-filter:checked')].map(cb => cb.value);
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    const showAll = checked.includes('');
+    document.querySelectorAll('#items-tbody tr').forEach(tr => {
+        const catMatch = showAll || checked.includes(tr.dataset.category);
+        const searchMatch = !search || tr.dataset.search.toLowerCase().includes(search);
+        tr.style.display = (catMatch && searchMatch) ? '' : 'none';
+    });
+}
+
+// Close modal on overlay click
+document.getElementById('itemModal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+});
+</script>
+{% endblock %}
+
+{% block head %}
+<script>
+// Patch form.method for PUT/DELETE support in HTML forms
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('form[method="post"]').forEach(form => {
+        const m = form.querySelector('input[name="_method"]');
+        if (m && m.value === 'put') {
+            form.addEventListener('submit', e => {
+                e.preventDefault();
+                const action = form.action;
+                const fd = new FormData(form);
+                fd.delete('_method');
+                fetch(action, { method: 'PUT', body: fd })
+                    .then(() => window.location.reload());
+            });
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,130 @@
+{% extends "layout.html" %}
+{% block title %}留言板{% endblock %}
+
+{% block content %}
+<div class="messages-page">
+    <h2 style="font-size:20px;margin-bottom:12px;">愿望单 & 留言板</h2>
+
+    <div style="margin-bottom:16px;">
+        <div style="display:flex;gap:8px;">
+            <button class="btn btn-primary" id="showWishBtn" onclick="showWishForm()" style="font-size:13px;">+ 添加愿望单</button>
+            <button class="btn btn-outline" id="showMsgBtn" onclick="showMsgForm()" style="font-size:13px;display:none;">切换为简单留言</button>
+        </div>
+    </div>
+
+    <!-- Wish form (hidden by default) -->
+    <div class="message-form" id="wishForm" style="display:none;">
+        <h3 style="font-size:15px;margin-bottom:10px;">提交采购愿望单</h3>
+        <form method="post" action="/api/messages">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <div><label>物品名称 *</label><input name="wish_name" required></div>
+                <div><label>分类</label>
+                    <select name="wish_category">
+                        {% for cat in categories %}
+                        <option value="{{ cat }}">{{ cat }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div><label>数量</label><input name="wish_quantity" type="number" step="any" value="1"></div>
+                <div><label>单位</label><input name="wish_unit" placeholder="瓶、盒..."></div>
+                <div><label>预估单价 (¥)</label><input name="wish_price" type="number" step="0.01" value="0"></div>
+                <div>
+                    <label>昵称</label>
+                    <input name="nickname" id="wishNickname" placeholder="你的昵称" required>
+                </div>
+            </div>
+            <label style="margin-top:8px;">备注 / 理由</label>
+            <textarea name="content" rows="2" placeholder="为什么需要买这个？有什么特殊要求？"></textarea>
+            <button type="submit" class="btn btn-primary" style="margin-top:8px;">提交愿望单</button>
+        </form>
+    </div>
+
+    <!-- Simple message form -->
+    <div class="message-form" id="msgForm" style="display:none;">
+        <h3 style="font-size:15px;margin-bottom:10px;">简单留言</h3>
+        <form method="post" action="/api/messages">
+            <label>昵称</label>
+            <input type="text" name="nickname" id="msgNickname" placeholder="你的昵称" required>
+            <label>内容</label>
+            <textarea name="content" rows="3" placeholder="写下留言..." required></textarea>
+            <button type="submit" class="btn btn-primary">提交</button>
+        </form>
+    </div>
+
+    {% for msg in messages %}
+    {% set dotted = msg.ip.split('.') %}
+    {% set masked = dotted[0] + '.' + dotted[1] + '.*.*' if dotted|length >= 4 else msg.ip %}
+    <div class="message-card">
+        <div class="meta">
+            <strong>{{ msg.nickname }}</strong>
+            <span>({{ masked }})</span>
+            <span>{{ msg.created_at }}</span>
+            <span class="badge {{ 'badge-done' if msg.status == 'done' else 'badge-pending' }}">
+                {{ '已购买' if msg.status == 'done' else '待采购' }}
+            </span>
+        </div>
+
+        {% if msg.wish_name %}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;font-size:13px;margin-bottom:8px;">
+            <span><strong>物品：</strong>{{ msg.wish_name }}</span>
+            <span><strong>分类：</strong>{{ msg.wish_category or '-' }}</span>
+            <span><strong>数量：</strong>{{ msg.wish_quantity or '-' }} {{ msg.wish_unit or '' }}</span>
+            <span><strong>单价：</strong>{% if msg.wish_price %}¥{{ msg.wish_price }}{% else %}-{% endif %}</span>
+        </div>
+        {% endif %}
+
+        {% if msg.content %}
+        <div class="content">{{ msg.content }}</div>
+        {% endif %}
+
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <form method="post" action="/api/messages/{{ msg.id }}/toggle" class="toggle-form">
+                <input type="hidden" name="nickname" value="">
+                {% if msg.status == 'pending' and msg.wish_name %}
+                <label style="font-size:12px;color:var(--text-muted);margin-right:4px;">
+                    <input type="checkbox" name="add_to_items" value="1"> 同时加入清单
+                </label>
+                {% endif %}
+                <button type="submit" class="btn btn-sm btn-outline">
+                    {{ '标记待采购' if msg.status == 'done' else '标记已购买' }}
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+
+    {% if not messages|length %}
+    <p style="color:var(--text-muted);text-align:center;padding:40px;">暂无留言，来写第一条吧</p>
+    {% endif %}
+</div>
+
+<script>
+const savedNick = localStorage.getItem('nickname') || '';
+
+function showWishForm() {
+    document.getElementById('wishForm').style.display = 'block';
+    document.getElementById('msgForm').style.display = 'none';
+    document.getElementById('showWishBtn').style.display = 'none';
+    document.getElementById('showMsgBtn').style.display = 'inline-flex';
+    document.getElementById('wishNickname').value = savedNick;
+}
+
+function showMsgForm() {
+    document.getElementById('wishForm').style.display = 'none';
+    document.getElementById('msgForm').style.display = 'block';
+    document.getElementById('showWishBtn').style.display = 'inline-flex';
+    document.getElementById('showMsgBtn').style.display = 'none';
+    document.getElementById('msgNickname').value = savedNick;
+}
+
+document.getElementById('wishNickname') && (document.getElementById('wishNickname').value = savedNick);
+document.getElementById('msgNickname') && (document.getElementById('msgNickname').value = savedNick);
+
+document.querySelectorAll('.toggle-form').forEach(form => {
+    form.addEventListener('submit', function() {
+        const nick = document.getElementById('msgNickname')?.value || savedNick || 'anonymous';
+        form.querySelector('input[name="nickname"]').value = nick;
+    });
+});
+</script>
+{% endblock %}

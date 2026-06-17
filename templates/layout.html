@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lab Manager — {% block title %}{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="nav">
+        <div class="nav-inner">
+            <a href="/check" class="nav-brand">Lab Manager</a>
+            <div class="nav-links">
+                <a href="/check" class="{% if request.url.path == '/check' %}active{% endif %}">每周检查</a>
+                <a href="/" class="{% if request.url.path == '/' %}active{% endif %}">物资清单</a>
+                <a href="/messages" class="{% if request.url.path == '/messages' %}active{% endif %}">留言板</a>
+                <a href="/logs" class="{% if request.url.path == '/logs' %}active{% endif %}">操作日志</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="main">
+        {% block content %}{% endblock %}
+    </main>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>
