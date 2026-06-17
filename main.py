@@ -132,12 +132,12 @@ async def index(request: Request):
     items = [dict(r) for r in db.execute("SELECT * FROM items ORDER BY id DESC")]
     enrich_items(items)
     total_count = len(items)
-    total_value = sum(it.get("price") or 0 for it in items)
+    total_value_str = f"{sum(it.get('price') or 0 for it in items):.0f}"
     warnings = [it for it in items if it["status_level"] in ("red", "yellow")]
     db.close()
     return templates.TemplateResponse("index.html", {
         "request": request, "items": items, "categories": CATEGORIES,
-        "total_count": total_count, "total_value": total_value, "warnings": warnings})
+        "total_count": total_count, "total_value_str": total_value_str, "warnings": warnings})
 
 @app.get("/messages", response_class=HTMLResponse)
 async def messages_page(request: Request):
