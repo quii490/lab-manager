@@ -123,8 +123,8 @@ async def check_page(request: Request):
         LEFT JOIN items i ON i.id = c.item_id ORDER BY c.id DESC LIMIT 30""")]
     db.close()
     return templates.TemplateResponse("check.html", {
-        "request": request, "items": check_items,
-        "categories": CATEGORIES, "check_records": cr})
+        "request": request, "items": [dict(it) for it in check_items],
+        "categories": tuple(CATEGORIES), "check_records": [dict(r) for r in cr]})
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -136,8 +136,13 @@ async def index(request: Request):
     warnings = [it for it in items if it["status_level"] in ("red", "yellow")]
     db.close()
     return templates.TemplateResponse("index.html", {
-        "request": request, "items": items, "categories": CATEGORIES,
-        "total_count": total_count, "total_value_str": total_value_str, "warnings": warnings})
+        "request": request,
+        "items": [dict(i) for i in items],
+        "categories": tuple(CATEGORIES),
+        "total_count": total_count,
+        "total_value_str": total_value_str,
+        "warnings": [dict(w) for w in warnings],
+    })
 
 @app.get("/messages", response_class=HTMLResponse)
 async def messages_page(request: Request):
@@ -145,14 +150,14 @@ async def messages_page(request: Request):
     msgs = [dict(r) for r in db.execute("SELECT * FROM messages ORDER BY id DESC")]
     db.close()
     return templates.TemplateResponse("messages.html", {
-        "request": request, "messages": msgs, "categories": CATEGORIES})
+        "request": request, "messages": [dict(m) for m in msgs], "categories": tuple(CATEGORIES)})
 
 @app.get("/logs", response_class=HTMLResponse)
 async def logs_page(request: Request):
     db = get_db()
     logs = [dict(r) for r in db.execute("SELECT * FROM logs ORDER BY id DESC LIMIT 200")]
     db.close()
-    return templates.TemplateResponse("logs.html", {"request": request, "logs": logs})
+    return templates.TemplateResponse("logs.html", {"request": request, "logs": [dict(l) for l in logs]})
 
 # --- API: Items ---
 
