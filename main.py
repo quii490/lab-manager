@@ -1,5 +1,8 @@
 import os
 import io
+import json
+import urllib.request
+import urllib.error
 import sqlite3
 from datetime import datetime, timedelta, date
 
@@ -167,8 +170,7 @@ async def index(request: Request):
         "categories": tuple(CATEGORIES),
         "total_count": total_count,
         "total_value_str": total_value_str,
-        "warnings": [dict(w) for w in warnings],
-    }))
+)
 
 @app.get("/messages", response_class=HTMLResponse)
 async def messages_page(request: Request):
@@ -363,6 +365,33 @@ async def export_items(request: Request):
     return StreamingResponse(output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=inventory.xlsx"})
+
+# --- Turso remote sync helper ---
+
+@app.post("/api/sync/import")
+async def sync_import(request: Request):
+    """Import items from Turso into local DB."""
+    if not os.environ.get("TURSO_URL"):
+        return {"ok": False, "error": "Turso not configured"}
+    turso_items = turso_fetch("SELECT * FROM items ORDER BY id")
+    db = get_db()
+    for it in turso_items:
+        existing = db.execute("SELECT id FROM items WHERE id=?", (int(it.get("id", 0)),)).fetchone()
+        if not existing:
+            db.execute("""INSERT INTO items (id, name, quantity, unit, location, category, expiry_date,
+                daily_consumption, min_threshold, supplier, price, notes, weekly_check, last_checked,
+                created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (
+                int(it.get("id", 0)), it.get("name", ""), float(it.get("quantity", 0)),
+                it.get("unit", ""), it.get("location", ""), it.get("category", ""),
+                it.get("expiry_date") or None, float(it.get("daily_consumption", 0)),
+                float(it.get("min_threshold", 0)), it.get("supplier", ""),
+                float(it.get("price", 0) or 0), it.get("notes", ""),
+                int(it.get("weekly_check", 0) or 0), it.get("last_checked") or None,
+                it.get("created_at", ""), it.get("updated_at", "")
+            ))
+    db.commit()
+    db.close()
+    return {"ok": True, "count": len(turso_items)}
 
 if __name__ == "__main__":
     import uvicorn
