@@ -170,7 +170,8 @@ async def index(request: Request):
         "categories": tuple(CATEGORIES),
         "total_count": total_count,
         "total_value_str": total_value_str,
-)
+        "warnings": [dict(w) for w in warnings],
+    }))
 
 @app.get("/messages", response_class=HTMLResponse)
 async def messages_page(request: Request):
@@ -367,6 +368,23 @@ async def export_items(request: Request):
         headers={"Content-Disposition": "attachment; filename=inventory.xlsx"})
 
 # --- Turso remote sync helper ---
+
+def turso_fetch(sql):
+    TURSO_URL = os.environ.get("TURSO_URL", "")
+    TURSO_TOKEN = os.environ.get("TURSO_TOKEN", "")
+    if not TURSO_URL or not TURSO_TOKEN:
+        return []
+    base = TURSO_URL.replace("libsql://", "https://") + "/v2/pipeline"
+    body = json.dumps({"requests": [{"type": "execute", "stmt": {"sql": sql}}]}).encode()
+    req = urllib.request.Request(base, data=body,
+        headers={"Authorization": f"Bearer {TURSO_TOKEN}", "Content-Type": "application/json"})
+    resp = json.loads(urllib.request.urlopen(req).read())
+    result = resp["results"][0]
+    if result["type"] == "error":
+        return []
+    data = result["response"]["result"]
+    cols = [c["name"] for c in data["cols"]]
+    return [dict(zip(cols, [v.get("value", "") for v in row])) for row in data["rows"]]
 
 @app.post("/api/sync/import")
 async def sync_import(request: Request):
