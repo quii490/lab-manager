@@ -69,29 +69,6 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 templates.env.cache_size = 0
 
-# Monkey-patch to avoid dict hash errors in Python 3.14 Jinja2
-_original_get_template = templates.get_template
-def _safe_get_template(name):
-    return app.state._template_cache.get(name) or _load_and_cache(name)
-def _load_and_cache(name):
-    t = templates.env.get_template(name)
-    app.state._template_cache[name] = t
-    return t
-
-# Build a simple cache
-def _build_template_cache():
-    cache = {}
-    for name in ["check.html", "index.html", "messages.html", "logs.html", "layout.html"]:
-        try:
-            cache[name] = templates.env.get_template(name)
-        except Exception:
-            pass
-    return cache
-
-@app.on_event("startup")
-async def startup():
-    app.state._template_cache = _build_template_cache()
-
 def ip_of(request: Request) -> str:
     forwarded = request.headers.get("X-Forwarded-For", "")
     return forwarded.split(",")[0].strip() or (request.client.host if request.client else "unknown")
@@ -149,10 +126,9 @@ async def check_page(request: Request):
         SELECT c.*, i.name as item_name FROM check_records c
         LEFT JOIN items i ON i.id = c.item_id ORDER BY c.id DESC LIMIT 30""")]
     db.close()
-    t = app.state._template_cache.get("check.html")
-    return HTMLResponse(t.render({
+    return templates.TemplateResponse("check.html", {
         "request": request, "items": [dict(it) for it in check_items],
-        "categories": tuple(CATEGORIES), "check_records": [dict(r) for r in cr]}))
+        "categories": tuple(CATEGORIES), "check_records": [dict(r) for r in cr]})
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -163,32 +139,29 @@ async def index(request: Request):
     total_value_str = f"{sum(it.get('price') or 0 for it in items):.0f}"
     warnings = [it for it in items if it["status_level"] in ("red", "yellow")]
     db.close()
-    t = app.state._template_cache.get("index.html")
-    return HTMLResponse(t.render({
+    return templates.TemplateResponse("index.html", {
         "request": request,
         "items": [dict(i) for i in items],
         "categories": tuple(CATEGORIES),
         "total_count": total_count,
         "total_value_str": total_value_str,
         "warnings": [dict(w) for w in warnings],
-    }))
+    })
 
 @app.get("/messages", response_class=HTMLResponse)
 async def messages_page(request: Request):
     db = get_db()
     msgs = [dict(r) for r in db.execute("SELECT * FROM messages ORDER BY id DESC")]
     db.close()
-    t = app.state._template_cache.get("messages.html")
-    return HTMLResponse(t.render({
-        "request": request, "messages": [dict(m) for m in msgs], "categories": tuple(CATEGORIES)}))
+    return templates.TemplateResponse("messages.html", {
+        "request": request, "messages": [dict(m) for m in msgs], "categories": tuple(CATEGORIES)})
 
 @app.get("/logs", response_class=HTMLResponse)
 async def logs_page(request: Request):
     db = get_db()
     logs = [dict(r) for r in db.execute("SELECT * FROM logs ORDER BY id DESC LIMIT 200")]
     db.close()
-    t = app.state._template_cache.get("logs.html")
-    return HTMLResponse(t.render({"request": request, "logs": [dict(l) for l in logs]}))
+    return templates.TemplateResponse("logs.html", {"request": request, "logs": [dict(l) for l in logs]})
 
 # --- API: Items ---
 
