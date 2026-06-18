@@ -74,7 +74,19 @@ init_db()
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
-templates.env.cache_size = 0
+
+# Disable Jinja2 bytecode cache completely for Python 3.14 compat
+templates.env.bytecode_cache = None
+if hasattr(templates.env, 'cache_size'):
+    templates.env.cache_size = 0
+if hasattr(templates.env, 'auto_reload'):
+    templates.env.auto_reload = True
+
+# Monkey-patch _load_template to avoid cache issues with unhashable globals
+_orig_load = templates.env._load_template
+def _safe_load(name, globals=None):
+    return _orig_load(name, None)
+templates.env._load_template = _safe_load
 
 def ip_of(request: Request) -> str:
     forwarded = request.headers.get("X-Forwarded-For", "")
