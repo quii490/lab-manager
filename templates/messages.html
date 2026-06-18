@@ -9,13 +9,9 @@
         <div style="display:flex;gap:8px;">
             <button class="btn btn-primary" id="showWishBtn" onclick="showWishForm()" style="font-size:13px;">+ 添加愿望单</button>
             <button class="btn btn-outline" id="showMsgBtn" onclick="showMsgForm()" style="font-size:13px;display:none;">切换为简单留言</button>
-            {% if messages|selectattr('status','equalto','done')|list|length > 0 %}
-            <button class="btn btn-outline" id="toggleDoneBtn" onclick="toggleDone()" style="font-size:13px;">显示已处理</button>
-            {% endif %}
         </div>
     </div>
 
-    <!-- Wish form -->
     <div class="message-form" id="wishForm" style="display:none;">
         <h3 style="font-size:15px;margin-bottom:10px;">提交采购愿望单</h3>
         <form method="post" action="/api/messages">
@@ -42,7 +38,6 @@
         </form>
     </div>
 
-    <!-- Simple message form -->
     <div class="message-form" id="msgForm" style="display:none;">
         <h3 style="font-size:15px;margin-bottom:10px;">简单留言</h3>
         <form method="post" action="/api/messages">
@@ -54,68 +49,55 @@
         </form>
     </div>
 
-    {% set pending_msgs = messages|selectattr('status','equalto','pending')|list %}
-    {% set done_msgs = messages|selectattr('status','equalto','done')|list %}
+    {% for msg in messages %}
+    {% if msg.status == 'done' %}{% set collapsed = true %}{% else %}{% set collapsed = false %}{% endif %}
+    {% set dotted = msg.ip.split('.') %}
+    {% set masked = dotted[0] + '.' + dotted[1] + '.*.*' if dotted|length >= 4 else msg.ip %}
+    <div class="message-card" data-status="{{ msg.status }}" {% if collapsed %}style="opacity:0.6;"{% endif %}>
+        <div class="meta">
+            <strong>{{ msg.nickname }}</strong>
+            <span>({{ masked }})</span>
+            <span>{{ msg.created_at }}</span>
+            <span class="badge {{ 'badge-done' if msg.status == 'done' else 'badge-pending' }}">
+                {{ '已购买' if msg.status == 'done' else '待采购' }}
+            </span>
+        </div>
 
-    {% for msg in pending_msgs %}
-    {{ render_message(msg, categories) }}
-    {% endfor %}
+        {% if msg.wish_name %}
+        <div class="wish-detail">
+            <span><strong>物品：</strong>{{ msg.wish_name }}</span>
+            <span><strong>分类：</strong>{{ msg.wish_category or '-' }}</span>
+            <span><strong>数量：</strong>{{ msg.wish_quantity or '-' }} {{ msg.wish_unit or '' }}</span>
+            <span><strong>单价：</strong>{% if msg.wish_price %}¥{{ msg.wish_price }}{% else %}-{% endif %}</span>
+        </div>
+        {% endif %}
 
-    {% if done_msgs|length > 0 %}
-    <div id="doneMessages" style="display:none;">
-        {% for msg in done_msgs %}
-        {{ render_message(msg, categories) }}
-        {% endfor %}
+        {% if msg.content %}
+        <div class="content">{{ msg.content }}</div>
+        {% endif %}
+
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <form method="post" action="/api/messages/{{ msg.id }}/toggle" class="toggle-form" style="display:inline;">
+                <input type="hidden" name="nickname" value="">
+                {% if msg.status == 'pending' and msg.wish_name %}
+                <label style="font-size:12px;color:var(--text-muted);margin-right:4px;">
+                    <input type="checkbox" name="add_to_items" value="1"> 同时加入清单
+                </label>
+                {% endif %}
+                <button type="submit" class="btn btn-sm btn-outline">
+                    {{ '标记待采购' if msg.status == 'done' else '标记已购买' }}
+                </button>
+            </form>
+            <button class="btn btn-sm btn-danger" onclick="deleteMsg({{ msg.id }})">删除</button>
+        </div>
     </div>
-    {% endif %}
+    {% endfor %}
 
     {% if not messages|length %}
     <p style="color:var(--text-muted);text-align:center;padding:40px;">暂无留言，来写第一条吧</p>
     {% endif %}
 </div>
 {% endblock %}
-
-{% macro render_message(msg, categories) %}
-{% set dotted = msg.ip.split('.') %}
-{% set masked = dotted[0] + '.' + dotted[1] + '.*.*' if dotted|length >= 4 else msg.ip %}
-<div class="message-card" data-status="{{ msg.status }}">
-    <div class="meta">
-        <strong>{{ msg.nickname }}</strong>
-        <span>({{ masked }})</span>
-        <span>{{ msg.created_at }}</span>
-        <span class="badge {{ 'badge-done' if msg.status == 'done' else 'badge-pending' }}">
-            {{ '已购买' if msg.status == 'done' else '待采购' }}
-        </span>
-    </div>
-
-    {% if msg.wish_name %}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;font-size:13px;margin-bottom:8px;">
-        <span><strong>物品：</strong>{{ msg.wish_name }}</span>
-        <span><strong>分类：</strong>{{ msg.wish_category or '-' }}</span>
-        <span><strong>数量：</strong>{{ msg.wish_quantity or '-' }} {{ msg.wish_unit or '' }}</span>
-        <span><strong>单价：</strong>{% if msg.wish_price %}¥{{ msg.wish_price }}{% else %}-{% endif %}</span>
-    </div>
-    {% endif %}
-
-    {% if msg.content %}
-    <div class="content">{{ msg.content }}</div>
-    {% endif %}
-
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <form method="post" action="/api/messages/{{ msg.id }}/toggle" class="toggle-form">
-            <input type="hidden" name="nickname" value="">
-            {% if msg.status == 'pending' and msg.wish_name %}
-            <label style="font-size:12px;color:var(--text-muted);margin-right:4px;">
-                <input type="checkbox" name="add_to_items" value="1"> 同时加入清单
-            </label>
-            {% endif %}
-            <button type="submit" class="btn btn-sm btn-outline">
-                {{ '标记待采购' if msg.status == 'done' else '标记已购买' }}
-            </button>
-        </form>
-    </div>
-</div>
-{% endmacro %}
 
 {% block scripts %}
 <script>
@@ -128,7 +110,6 @@ function showWishForm() {
     document.getElementById('showMsgBtn').style.display = 'inline-flex';
     document.getElementById('wishNickname').value = savedNick;
 }
-
 function showMsgForm() {
     document.getElementById('wishForm').style.display = 'none';
     document.getElementById('msgForm').style.display = 'block';
@@ -137,26 +118,19 @@ function showMsgForm() {
     document.getElementById('msgNickname').value = savedNick;
 }
 
-function toggleDone() {
-    var el = document.getElementById('doneMessages');
-    var btn = document.getElementById('toggleDoneBtn');
-    if (el.style.display === 'none') {
-        el.style.display = 'block';
-        btn.textContent = '隐藏已处理';
-    } else {
-        el.style.display = 'none';
-        btn.textContent = '显示已处理';
-    }
-}
-
 document.getElementById('wishNickname') && (document.getElementById('wishNickname').value = savedNick);
 document.getElementById('msgNickname') && (document.getElementById('msgNickname').value = savedNick);
 
 document.querySelectorAll('.toggle-form').forEach(form => {
     form.addEventListener('submit', function() {
-        const nick = document.getElementById('msgNickname')?.value || savedNick || 'anonymous';
-        form.querySelector('input[name="nickname"]').value = nick;
+        form.querySelector('input[name="nickname"]').value = savedNick || 'anonymous';
     });
 });
+
+async function deleteMsg(id) {
+    if (!confirm('确定删除这条留言吗？')) return;
+    await fetch('/api/messages/' + id + '?nickname=' + encodeURIComponent(savedNick || 'anonymous'), { method: 'DELETE' });
+    window.location.reload();
+}
 </script>
 {% endblock %}

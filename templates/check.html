@@ -54,7 +54,7 @@
                                 <input type="hidden" name="quantity" value="{{ item.quantity }}">
                                 <button type="submit" class="btn btn-sm btn-primary">确认</button>
                             </form>
-                            <button class="btn btn-sm btn-ghost" onclick="openEditModal({{ item.id }})">编辑</button>
+                            <button class="btn btn-sm btn-ghost" onclick="editItem({{ item.id }})">编辑</button>
                             <span style="font-size:11px;color:var(--text-muted);">调量</span>
                             <input type="number" step="any" value="{{ item.quantity }}" style="width:60px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;"
                                    class="qty-input" data-id="{{ item.id }}" data-name="{{ item.name }}">
@@ -94,10 +94,51 @@
     {% endif %}
 </div>
 
+<!-- Edit Modal (same as index.html) -->
+<div class="modal-overlay" id="itemModal">
+    <div class="modal">
+        <h2 id="modalTitle">编辑物品</h2>
+        <form id="itemForm" method="post" action="/api/items/0">
+            <input type="hidden" name="nickname" id="formNickname">
+            <input type="hidden" name="_method" id="formMethod" value="put">
+            <div class="form-row">
+                <div class="form-group"><label>名称 *</label><input name="name" id="fname" required></div>
+                <div class="form-group"><label>分类</label>
+                    <select name="category" id="fcategory">
+                        {% for cat in categories %}
+                        <option value="{{ cat }}">{{ cat }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>数量 *</label><input name="quantity" id="fquantity" type="number" step="any" value="0" required></div>
+                <div class="form-group"><label>单位</label><input name="unit" id="funit" placeholder="瓶、盒、μL..."></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>存放位置</label><input name="location" id="flocation" placeholder="冰箱A、柜子2..."></div>
+                <div class="form-group"><label>过期/用完日期</label><input name="expiry_date" id="fexpiry" type="date"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>日消耗量</label><input name="daily_consumption" id="fdaily" type="number" step="any" value="0" placeholder="每天用多少"></div>
+                <div class="form-group"><label>最低库存阈值</label><input name="min_threshold" id="fthreshold" type="number" step="any" value="0" placeholder="低于此值警告"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>供应商</label><input name="supplier" id="fsupplier"></div>
+                <div class="form-group"><label>单价 (¥)</label><input name="price" id="fprice" type="number" step="0.01" value="0"></div>
+            </div>
+            <div class="form-group"><label>备注</label><textarea name="notes" id="fnotes" rows="2"></textarea></div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-outline" onclick="closeModal()">取消</button>
+                <button type="submit" class="btn btn-primary">保存</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 const dutyNick = document.getElementById('dutyNickname');
 dutyNick.value = localStorage.getItem('dutyNickname') || '';
-
 function saveDuty() { localStorage.setItem('dutyNickname', dutyNick.value); }
 
 document.querySelectorAll('.check-form').forEach(form => {
@@ -109,13 +150,12 @@ document.querySelectorAll('.check-form').forEach(form => {
 document.querySelectorAll('.qty-update').forEach(btn => {
     btn.addEventListener('click', function() {
         const id = this.dataset.id;
-        const input = document.querySelector(`.qty-input[data-id="${id}"]`);
+        const input = document.querySelector('.qty-input[data-id="' + id + '"]');
         const qty = input.value;
-        const nickname = dutyNick.value || 'anonymous';
         const f = document.createElement('form');
         f.method = 'post';
-        f.action = `/api/check/${id}/confirm`;
-        f.innerHTML = `<input name="nickname" value="${nickname}"><input name="quantity" value="${qty}">`;
+        f.action = '/api/check/' + id + '/confirm';
+        f.innerHTML = '<input name="nickname" value="' + (dutyNick.value || 'anonymous') + '"><input name="quantity" value="' + qty + '">';
         document.body.appendChild(f);
         f.submit();
         document.body.removeChild(f);
@@ -124,19 +164,17 @@ document.querySelectorAll('.qty-update').forEach(btn => {
 
 const nickname = localStorage.getItem('nickname') || '';
 
-function openEditModal(id) {
+function editItem(id) {
     fetch('/api/items?search=')
         .then(r => r.json())
         .then(items => {
             const item = items.find(i => i.id === id);
             if (!item) return;
-            const form = document.getElementById('itemForm');
-            form.action = '/api/items/' + id;
-            document.getElementById('formMethod').value = 'put';
+            document.getElementById('itemForm').action = '/api/items/' + id;
             document.getElementById('fname').value = item.name;
             document.getElementById('fcategory').value = item.category;
             document.getElementById('fquantity').value = item.quantity;
-            document.getElementById('funit').value = item.unit;
+            document.getElementById('funit').value = item.unit || '';
             document.getElementById('flocation').value = item.location || '';
             document.getElementById('fexpiry').value = item.expiry_date || '';
             document.getElementById('fdaily').value = item.daily_consumption || 0;
@@ -144,21 +182,22 @@ function openEditModal(id) {
             document.getElementById('fsupplier').value = item.supplier || '';
             document.getElementById('fprice').value = item.price || 0;
             document.getElementById('fnotes').value = item.notes || '';
-            document.getElementById('formNickname').value = nickname;
+            document.getElementById('formNickname').value = nickname || dutyNick.value || 'anonymous';
             document.getElementById('itemModal').classList.add('open');
         });
 }
 
 function closeModal() { document.getElementById('itemModal').classList.remove('open'); }
 
+document.getElementById('itemModal').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+});
+
 document.getElementById('itemForm').addEventListener('submit', function(e) {
-    const method = document.getElementById('formMethod').value;
-    if (method === 'put') {
-        e.preventDefault();
-        const formData = new FormData(this);
-        fetch(this.action, { method: 'PUT', body: formData })
-            .then(() => { window.location.reload(); });
-    }
+    e.preventDefault();
+    const formData = new FormData(this);
+    fetch(this.action, { method: 'PUT', body: formData })
+        .then(() => { window.location.reload(); });
 });
 </script>
 {% endblock %}
