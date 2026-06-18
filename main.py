@@ -12,12 +12,19 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 DB_PATH = os.environ.get("DB_PATH", "lab.db")
+USE_TZ = os.environ.get("TZ")
 CATEGORIES = ["公用试剂", "特殊试剂", "试剂盒", "酶", "细胞", "抗体", "耗材", "细胞培养", "设备"]
 
 def localtime():
+    if USE_TZ:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo(USE_TZ)).strftime("%Y-%m-%d %H:%M:%S")
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 def localdate():
+    if USE_TZ:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo(USE_TZ)).strftime("%Y-%m-%d")
     return date.today().strftime("%Y-%m-%d")
 
 def get_db():
