@@ -75,18 +75,20 @@ app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-# Disable Jinja2 bytecode cache completely for Python 3.14 compat
-templates.env.bytecode_cache = None
-if hasattr(templates.env, 'cache_size'):
-    templates.env.cache_size = 0
-if hasattr(templates.env, 'auto_reload'):
-    templates.env.auto_reload = True
+# Pre-compile templates once at module load with empty globals
+# to avoid Jinja2 LRU cache dict hash issues on Python 3.14
+_template_registry = {}
+for _name in ["check.html", "index.html", "messages.html", "logs.html"]:
+    try:
+        _template_registry[_name] = templates.env.get_template(_name)
+    except Exception:
+        pass
 
-# Monkey-patch _load_template to avoid cache issues with unhashable globals
-_orig_load = templates.env._load_template
-def _safe_load(name, globals=None):
-    return _orig_load(name, None)
-templates.env._load_template = _safe_load
+def _render(name: str, request: Request, **kwargs) -> HTMLResponse:
+    t = _template_registry.get(name)
+    if t:
+        return HTMLResponse(t.render(request=request, **kwargs))
+    return HTMLResponse(templates.env.get_template(name).render(request=request, **kwargs))
 
 def ip_of(request: Request) -> str:
     forwarded = request.headers.get("X-Forwarded-For", "")
@@ -145,9 +147,9 @@ async def check_page(request: Request):
         SELECT c.*, i.name as item_name FROM check_records c
         LEFT JOIN items i ON i.id = c.item_id ORDER BY c.id DESC LIMIT 30""")]
     db.close()
-    return templates.TemplateResponse("check.html", {
-        "request": request, "items": [dict(it) for it in check_items],
-        "categories": tuple(CATEGORIES), "check_records": [dict(r) for r in cr]})
+    return _render("check.html", request,
+        items=[dict(it) for it in check_items],
+        categories=tuple(CATEGORIES), check_records=[dict(r) for r in cr])
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -158,29 +160,27 @@ async def index(request: Request):
     total_value_str = f"{sum(it.get('price') or 0 for it in items):.0f}"
     warnings = [it for it in items if it["status_level"] in ("red", "yellow")]
     db.close()
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "items": [dict(i) for i in items],
-        "categories": tuple(CATEGORIES),
-        "total_count": total_count,
-        "total_value_str": total_value_str,
-        "warnings": [dict(w) for w in warnings],
-    })
+    return _render("index.html", request,
+        items=[dict(i) for i in items],
+        categories=tuple(CATEGORIES),
+        total_count=total_count,
+        total_value_str=total_value_str,
+        warnings=[dict(w) for w in warnings])
 
 @app.get("/messages", response_class=HTMLResponse)
 async def messages_page(request: Request):
     db = get_db()
     msgs = [dict(r) for r in db.execute("SELECT * FROM messages ORDER BY id DESC")]
     db.close()
-    return templates.TemplateResponse("messages.html", {
-        "request": request, "messages": [dict(m) for m in msgs], "categories": tuple(CATEGORIES)})
+    return _render("messages.html", request,
+        messages=[dict(m) for m in msgs], categories=tuple(CATEGORIES))
 
 @app.get("/logs", response_class=HTMLResponse)
 async def logs_page(request: Request):
     db = get_db()
     logs = [dict(r) for r in db.execute("SELECT * FROM logs ORDER BY id DESC LIMIT 200")]
     db.close()
-    return templates.TemplateResponse("logs.html", {"request": request, "logs": [dict(l) for l in logs]})
+    return _render("logs.html", request, logs=[dict(l) for l in logs])
 
 # --- API: Items ---
 
