@@ -54,6 +54,7 @@
                                 <input type="hidden" name="quantity" value="{{ item.quantity }}">
                                 <button type="submit" class="btn btn-sm btn-primary">确认</button>
                             </form>
+                            <button class="btn btn-sm btn-ghost" onclick="openEditModal({{ item.id }})">编辑</button>
                             <span style="font-size:11px;color:var(--text-muted);">调量</span>
                             <input type="number" step="any" value="{{ item.quantity }}" style="width:60px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;"
                                    class="qty-input" data-id="{{ item.id }}" data-name="{{ item.name }}">
@@ -119,6 +120,45 @@ document.querySelectorAll('.qty-update').forEach(btn => {
         f.submit();
         document.body.removeChild(f);
     });
+});
+
+const nickname = localStorage.getItem('nickname') || '';
+
+function openEditModal(id) {
+    fetch('/api/items?search=')
+        .then(r => r.json())
+        .then(items => {
+            const item = items.find(i => i.id === id);
+            if (!item) return;
+            const form = document.getElementById('itemForm');
+            form.action = '/api/items/' + id;
+            document.getElementById('formMethod').value = 'put';
+            document.getElementById('fname').value = item.name;
+            document.getElementById('fcategory').value = item.category;
+            document.getElementById('fquantity').value = item.quantity;
+            document.getElementById('funit').value = item.unit;
+            document.getElementById('flocation').value = item.location || '';
+            document.getElementById('fexpiry').value = item.expiry_date || '';
+            document.getElementById('fdaily').value = item.daily_consumption || 0;
+            document.getElementById('fthreshold').value = item.min_threshold || 0;
+            document.getElementById('fsupplier').value = item.supplier || '';
+            document.getElementById('fprice').value = item.price || 0;
+            document.getElementById('fnotes').value = item.notes || '';
+            document.getElementById('formNickname').value = nickname;
+            document.getElementById('itemModal').classList.add('open');
+        });
+}
+
+function closeModal() { document.getElementById('itemModal').classList.remove('open'); }
+
+document.getElementById('itemForm').addEventListener('submit', function(e) {
+    const method = document.getElementById('formMethod').value;
+    if (method === 'put') {
+        e.preventDefault();
+        const formData = new FormData(this);
+        fetch(this.action, { method: 'PUT', body: formData })
+            .then(() => { window.location.reload(); });
+    }
 });
 </script>
 {% endblock %}

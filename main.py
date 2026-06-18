@@ -300,6 +300,19 @@ async def api_messages_add(request: Request):
     db.close()
     return RedirectResponse("/messages", status_code=303)
 
+@app.delete("/api/messages/{msg_id}")
+async def api_messages_delete(msg_id: int, request: Request):
+    ip = ip_of(request)
+    nickname = request.query_params.get("nickname", "")
+    db = get_db()
+    msg = db.execute("SELECT * FROM messages WHERE id=?", (msg_id,)).fetchone()
+    if msg:
+        db.execute("DELETE FROM messages WHERE id=?", (msg_id,))
+        add_log(db, ip, nickname, f"删除留言: {msg.get('wish_name') or msg.get('content', '')[:30]}")
+        db.commit()
+    db.close()
+    return RedirectResponse("/messages", status_code=303)
+
 @app.post("/api/messages/{msg_id}/toggle")
 async def api_messages_toggle(msg_id: int, request: Request):
     form = await request.form()
