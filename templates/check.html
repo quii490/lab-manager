@@ -168,7 +168,7 @@ function editItem(id) {
     fetch('/api/items?search=')
         .then(r => r.json())
         .then(items => {
-            const item = items.find(i => i.id === id);
+            const item = items.find(i => parseInt(i.id) === id);
             if (!item) return;
             document.getElementById('itemForm').action = '/api/items/' + id;
             document.getElementById('fname').value = item.name;

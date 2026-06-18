@@ -157,7 +157,7 @@ function openEditModal(id) {
     fetch('/api/items?search=')
         .then(r => r.json())
         .then(items => {
-            const item = items.find(i => i.id === id);
+            const item = items.find(i => parseInt(i.id) === id);
             if (!item) return;
             document.getElementById('modalTitle').textContent = '编辑物品';
             const form = document.getElementById('itemForm');
